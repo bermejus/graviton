@@ -1,0 +1,1 @@
+pub const AU: f64 = 149597870.700; // Astronomical Unit [km]
