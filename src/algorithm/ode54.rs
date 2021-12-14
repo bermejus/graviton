@@ -16,7 +16,7 @@ const A: [[f64; 6]; 7] = [
 
 const B: [[f64; 7]; 2] = [
     [35./384., 0., 500./1113., 125./192., -2187./6784., 11./84., 0.],
-    [5179./57600., 0., 7571./16695., 393./640., -92097./339200., 187./2100., 1./40.]
+    [5179./57600., 0., 7571./16695., 393./640., -92097./339200., 187./2100., 1./40.],
 ];
 
 const E: [f64; 7] = [
@@ -67,7 +67,7 @@ fn update_step(y_i: &mut Array1<f64>, t_i: &mut f64, f_k: &[Array1<f64>; 7], h: 
     *t_i += h;
 }
 
-pub fn dp45(fcn: impl Fn(ArrayView1<f64>, f64) -> Array1<f64>, y0: ArrayView1<f64>, tspan: [f64; 2], rtol: f64, atol: f64, h0: Option<f64>) -> Array1<f64> {
+pub fn ode54(fcn: impl Fn(ArrayView1<f64>, f64) -> Array1<f64>, y0: ArrayView1<f64>, tspan: [f64; 2], rtol: f64, atol: f64, h0: Option<f64>) -> Array1<f64> {
     let threshold = atol / rtol;
     let mut remaining = tspan[1] - tspan[0];
 
