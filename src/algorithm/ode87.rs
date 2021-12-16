@@ -112,6 +112,7 @@ pub fn ode87(fcn: impl Fn(ArrayView1<f64>, f64) -> Array1<f64>, y0: ArrayView1<f
     let mut f_k: [Array1<f64>; 13] = Default::default();
 
     while remaining > 0. {
+        println!("h: {}", h);
         if 1.1 * h > remaining {
             h = remaining;
             step(&fcn, y_i.view(), &mut f_k, t_i, h);
