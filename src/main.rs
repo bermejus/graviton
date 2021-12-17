@@ -7,7 +7,7 @@ use simulation::*;
 mod algorithm;
 mod simulation;
 
-fn initialize_planets(bodies: &mut Bodies) {
+fn initialize_bodies(bodies: &mut Bodies) {
     for body in bodies.iter_mut() {
         let body_name = body.0.split(' ').next().unwrap();
 
@@ -16,7 +16,7 @@ fn initialize_planets(bodies: &mut Bodies) {
     }
 }
 
-fn update_planets(bodies: &mut Bodies, et: f64) {
+fn update_bodies_position(bodies: &mut Bodies, et: f64) {
     for body in bodies.iter_mut() {
         body.1.position = arr1(&spice::spkpos(body.0, et, "J2000", "NONE", "SSB").0);
     }
@@ -28,6 +28,9 @@ fn concat<T>(x1: &[T], x2: &[T]) -> Vec<T>
 }
 
 fn main() {
+    spice::furnsh("kernels/kernels.tm");
+    let epoch_time = spice::str2et("2022-JAN-01 00:00:00");
+
     let mut params = Parameters::from([
         ("bodies", Bodies::from([
             ("SUN", CelestialBody::empty()),
@@ -41,23 +44,19 @@ fn main() {
             ("URANUS BARYCENTER", CelestialBody::empty()),
             ("NEPTUNE BARYCENTER", CelestialBody::empty()),
             ("PLUTO BARYCENTER", CelestialBody::empty())
-        ]).into()),
-        ("m", 100f64.into())
+        ]).into())
     ]);
-
-    spice::furnsh("assets/kernels/kernels.tm");
-    let et = spice::str2et("2127-MAR-23 16:00:00");
     
     let bodies: &mut Bodies = params.get_mut("bodies").unwrap().get_mut();
-    initialize_planets(bodies);
-    update_planets(bodies, et);
-    println!("{:#?}", bodies);
-
-    spice::unload("assets/kernels/kernels.tm");
-
+    initialize_bodies(bodies);
+    update_bodies_position(bodies, epoch_time);
+    
     let y0 = arr1(&concat(&[1.2 * AU; 3], &[20.0; 3]));
-    let tspan = [0.0, 3600.0 * 24.0 * 365.0 * 30.0];
+    let tspan = [epoch_time, epoch_time + 3600.0 * 24.0 * 365.0 * 30.0];
+
     let mut res = ode87(|y, t| dynamics(y, t, &params), y0.view(), tspan, 1e-12, 1e-12, None);
     res.slice_mut(s![..3]).mapv_inplace(|e| e / AU);
     println!("Result: {}", res);
+
+    spice::unload("kernels/kernels.tm");
 }

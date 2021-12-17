@@ -14,7 +14,6 @@ fn calculate_accel(bodies: &Bodies, position: ArrayView1<f64>) -> Array1<f64> {
         let local_accel = -(body.1.mu / r_mag) * rhat;
         accel += &local_accel;
     }
-    println!("Accel: {:e} km/s^2", l2_norm(&accel));
     accel
 }
 
@@ -22,6 +21,11 @@ pub fn dynamics(y: ArrayView1<f64>, t: f64, p: &Parameters) -> Array1<f64> {
     let mut dy = Array1::<f64>::zeros(6);
     dy.slice_mut(s![..3]).assign(&y.slice(s![3..6]));
 
+    // Fetch bodies and update their position
+    /*let bodies = p.get_mut("bodies").unwrap().get_mut();
+    for body in bodies.iter_mut() {
+        body.1.position
+    }*/
     // Calculate acceleration at given point
     let accel = calculate_accel(
         p.get("bodies").unwrap().get(),
