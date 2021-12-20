@@ -1,62 +1,132 @@
-use spice;
 
-use ndarray::{arr1, s};
-use algorithm::*;
-use simulation::*;
+use bevy::{
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    pbr::AmbientLight,
+    prelude::*,
+    render::wireframe::{Wireframe, WireframeConfig, WireframePlugin},
+    wgpu::{WgpuFeature, WgpuFeatures, WgpuOptions}
+};
 
-mod algorithm;
-mod simulation;
+use components::*;
+mod components;
 
-fn initialize_bodies(bodies: &mut Bodies) {
-    for body in bodies.iter_mut() {
-        let body_name = body.0.split(' ').next().unwrap();
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut wireframe_config: ResMut<WireframeConfig>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>
+) {
+    // Turn off wireframe rendering
+    wireframe_config.global = false;
 
-        body.1.mu = spice::bodvrd(body.0, "GM", 1)[0];
-        body.1.radii = spice::bodvrd(body_name, "RADII", 3).try_into().unwrap();
-    }
-}
+    // Load all textures
+    let sun_texture_handle = asset_server.load("textures/sun/8k_sun.jpg");
+    let mercury_texture_handle = asset_server.load("textures/mercury/8k_mercury.jpg");
+    let earth_texture_handle = asset_server.load("textures/earth/8k_earth_daymap.jpg");
 
-fn update_bodies_position(bodies: &mut Bodies, et: f64) {
-    for body in bodies.iter_mut() {
-        body.1.position = arr1(&spice::spkpos(body.0, et, "J2000", "NONE", "SSB").0);
-    }
-}
+    // Sphere Handle
+    let sphere_handle = meshes.add(
+        Mesh::from(shape::Icosphere {
+            radius: 3.0,
+            subdivisions: 8
+        })
+    );
 
-fn concat<T>(x1: &[T], x2: &[T]) -> Vec<T>
-    where T: Clone {
-    [x1, x2].concat()
+    // Create material handles
+    let sun_material_handle = materials.add(StandardMaterial {
+        base_color_texture: Some(sun_texture_handle),
+        unlit: true,
+        roughness: 0.9,
+        metallic: 0.0,
+        ..Default::default()
+    });
+
+    let mercury_material_handle = materials.add(StandardMaterial {
+        base_color_texture: Some(mercury_texture_handle),
+        ..Default::default()
+    });
+
+    let earth_material_handle = materials.add(StandardMaterial {
+        base_color_texture: Some(earth_texture_handle),
+        ..Default::default()
+    });
+
+    // Draw the Sun
+    commands.spawn_bundle(PbrBundle {
+        mesh: sphere_handle.clone(),
+        material: sun_material_handle,
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.0, 0.0),
+            ..Default::default()
+        },
+        visible: Visible {
+            is_transparent: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .insert(Wireframe);
+
+    // Draw Mercury
+    commands.spawn_bundle(PbrBundle {
+        mesh: sphere_handle.clone(),
+        material: mercury_material_handle,
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.0, 8.0),
+            ..Default::default()
+        },
+        visible: Visible {
+            is_transparent: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    
+    // Draw Earth
+    commands.spawn_bundle(PbrBundle {
+        mesh: sphere_handle.clone(),
+        material: earth_material_handle,
+        transform: Transform {
+            translation: Vec3::new(0.0, 0.0, -7.0),
+            ..Default::default()
+        },
+        visible: Visible {
+            is_transparent: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    commands.spawn_bundle(LightBundle {
+        transform: Transform::from_xyz(0.0, 100.0, 0.0),
+        ..Default::default()
+    });
 }
 
 fn main() {
-    spice::furnsh("kernels/kernels.tm");
-    let epoch_time = spice::str2et("2022-JAN-01 00:00:00");
+    App::build()
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+        .insert_resource(AmbientLight {
+            color: Color::WHITE,
+            brightness: 0.33
+        })
+        .insert_resource(Msaa { samples: 4 })
+        .insert_resource(WgpuOptions {
+            features: WgpuFeatures {
+                features: vec![WgpuFeature::NonFillPolygonMode]
+            },
+            ..Default::default()
+        })
+        .add_plugins(DefaultPlugins)
+        .add_plugin(WireframePlugin)
 
-    let mut params = Parameters::from([
-        ("bodies", Bodies::from([
-            ("SUN", CelestialBody::empty()),
-            ("MERCURY BARYCENTER", CelestialBody::empty()),
-            ("VENUS BARYCENTER", CelestialBody::empty()),
-            ("EARTH", CelestialBody::empty()),
-            ("MOON", CelestialBody::empty()),
-            ("MARS BARYCENTER", CelestialBody::empty()),
-            ("JUPITER BARYCENTER", CelestialBody::empty()),
-            ("SATURN BARYCENTER", CelestialBody::empty()),
-            ("URANUS BARYCENTER", CelestialBody::empty()),
-            ("NEPTUNE BARYCENTER", CelestialBody::empty()),
-            ("PLUTO BARYCENTER", CelestialBody::empty())
-        ]).into())
-    ]);
-    
-    let bodies: &mut Bodies = params.get_mut("bodies").unwrap().get_mut();
-    initialize_bodies(bodies);
-    update_bodies_position(bodies, epoch_time);
-    
-    let y0 = arr1(&concat(&[1.2 * AU; 3], &[20.0; 3]));
-    let tspan = [epoch_time, epoch_time + 3600.0 * 24.0 * 365.0 * 30.0];
+        // Show FPS
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
 
-    let mut res = ode87(|y, t| dynamics(y, t, &params), y0.view(), tspan, 1e-12, 1e-12, None);
-    res.slice_mut(s![..3]).mapv_inplace(|e| e / AU);
-    println!("Result: {}", res);
-
-    spice::unload("kernels/kernels.tm");
+        .add_startup_system(setup.system())
+        .add_startup_system(spawn_camera.system())
+        .add_system(pan_orbit_camera.system())
+        .run();
 }
